@@ -60,10 +60,12 @@ class CausalSelfAttention(nn.Module):
 
     def forward(self, x, layer_past=None):
         
-        # Wenqi: B, T, C = batch size, sequence length, and dimension of embedding vectors 
+        # Wenqi: B, T, C = batch size, sequence length (T stands for time dimension), and dimension of embedding vectors 
         #        here it assumes to run forward for an entire sequence, not autoregressive?
         #        or will this forward be called every token generation? and apply lazy evaluation
-        #          to avoid recalculating previous steps?
+        #          to avoid recalculating previous steps? 
+        #        -> This is actually very useful during training where the sequence is already known, and for
+        #           training its very important to mask future tokens
         B, T, C = x.size()
         
         # Wenqi: here, nh stands for number of heads, hs stands for head size (dimension)
