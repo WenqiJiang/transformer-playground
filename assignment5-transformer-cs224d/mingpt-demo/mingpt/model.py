@@ -59,13 +59,25 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
 
     def forward(self, x, layer_past=None):
+        
+        # Wenqi: B, T, C = batch size, sequence length, and dimension of embedding vectors 
+        #        here it assumes to run forward for an entire sequence, not autoregressive?
+        #        or will this forward be called every token generation? and apply lazy evaluation
+        #          to avoid recalculating previous steps?
         B, T, C = x.size()
-
+        
+        # Wenqi: here, nh stands for number of heads, hs stands for head size (dimension)
+        
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         k = self.key(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = self.query(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
 
+        # Wenqi: matmul in pytorch only uses the last 2 dimensions, the previous dimensions are considred 
+        #          as batches, i.e., batched matmul
+        #        here, the result of q(K)^T is a TxT matrix that specifies the attention scores
+        #          between all k-v pairs
+        
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
         att = att.masked_fill(self.mask[:,:,:T,:T] == 0, float('-inf'))
@@ -74,6 +86,8 @@ class CausalSelfAttention(nn.Module):
         y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
+        # Wenqi: no such projections in default GPT
+        
         # output projection
         y = self.resid_drop(self.proj(y))
         return y
@@ -86,6 +100,9 @@ class Block(nn.Module):
         self.ln1 = nn.LayerNorm(config.n_embd)
         self.ln2 = nn.LayerNorm(config.n_embd)
         self.attn = CausalSelfAttention(config)
+        
+        # Wenqi: 2-layer feed forward
+        
         self.mlp = nn.Sequential(
             nn.Linear(config.n_embd, 4 * config.n_embd),
             nn.GELU(),
@@ -94,6 +111,10 @@ class Block(nn.Module):
         )
 
     def forward(self, x):
+        
+        # Wenqi: shouldn't it be self.ln1(x + self.attn(x))?
+        #        ref: https://d2l.ai/chapter_attention-mechanisms-and-transformers/transformer.html#residual-connection-and-layer-normalization
+        
         x = x + self.attn(self.ln1(x))
         x = x + self.mlp(self.ln2(x))
         return x
@@ -181,6 +202,9 @@ class GPT(nn.Module):
         b, t = idx.size()
         assert t <= self.block_size, "Cannot forward, model block size is exhausted."
 
+        # Wenqi: add token/position embedding before the transformer blocks, and a linear regression layer
+        #        after it for next word prediction
+        
         # forward the GPT model
         token_embeddings = self.tok_emb(idx) # each index maps to a (learnable) vector
         position_embeddings = self.pos_emb[:, :t, :] # each position maps to a (learnable) vector
