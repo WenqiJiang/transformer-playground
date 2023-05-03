@@ -5,6 +5,7 @@
 '''
 import torch
 import torch.nn.functional as F
+import time
 from tqdm import trange
 
 def top_k_logits(logits, k):
@@ -25,6 +26,7 @@ def sample_sequence(model, length, start_token=None, batch_size=None, context=No
     output = context
     past = None
     with torch.no_grad():
+        start = time.time()
         for i in trange(length):
             logits, past = model(prev, past=past)
             logits = logits[:, -1, :] / temperature
@@ -35,4 +37,6 @@ def sample_sequence(model, length, start_token=None, batch_size=None, context=No
             else:
                 _, prev = torch.topk(log_probs, k=1, dim=-1)
             output = torch.cat((output, prev), dim=1)
+        end  = time.time()
+        print("Generating {} tokens took {} sec".format(length, end - start))
     return output
