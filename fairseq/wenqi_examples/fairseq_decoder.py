@@ -18,11 +18,6 @@ args.decoder = { \
     "ffn_embed_dim": 4096, 
     "layers" : 12,
     "attention_heads" : 16}
-args.encoder = { \
-    "embed_dim" : 1024, 
-    "ffn_embed_dim": 4096, 
-    "layers" : 12,
-    "attention_heads" : 16}
 
 cfg = TransformerConfig.from_namespace(args)
 print(f"The config created from args: {cfg}")
