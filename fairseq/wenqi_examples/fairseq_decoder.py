@@ -29,7 +29,7 @@ dictionary = Dictionary()
 vocab_size = 10
 dec_embs = torch.nn.Embedding(vocab_size, args.decoder["embed_dim"], dictionary.pad())
 
-model = TransformerDecoder(args, dictionary, dec_embs)
+model = TransformerDecoder(args, dictionary, dec_embs, no_encoder_attn=True)
 print(model)
 
 batch_size = 1
@@ -58,6 +58,20 @@ def test_incremental_inference(model, prefix_len=500, final_len=512, batch_size=
         for seq_len in range(prefix_len, final_len + 1):
             input_tokens = torch.tensor([[0] * seq_len] * batch_size)
             start = time.time()
+            """
+            The incremental_state will only add the current state into the dictionary, 
+                i.e., its size grows linearly with its step steps. 
+            Thus, it incremental inference must start from the beginning, i.e.,
+                not with a prefix of 500
+
+            Example:
+                step 510: 32.01556205749512 ms
+                Shape of one layer in incremental_state:  torch.Size([1, 16, 510, 64])
+                step 511: 31.69989585876465 ms
+                Shape of one layer in incremental_state:  torch.Size([1, 16, 511, 64])
+                step 512: 30.326128005981445 ms
+                Shape of one layer in incremental_state:  torch.Size([1, 16, 512, 64])
+            """
             if incremental:
                 out_tensor, out_dict = model(input_tokens, incremental_state=incremental_state)
             else:
@@ -65,9 +79,13 @@ def test_incremental_inference(model, prefix_len=500, final_len=512, batch_size=
             end = time.time()
             time_array.append(end - start)
             print('step {}: {} ms'.format(seq_len, (end - start) * 1000))
+            if incremental:
+                for k in incremental_state:
+                    print("Shape of one layer in incremental_state: ", incremental_state[k]['prev_key'].shape)
+                    break
                   
-test_incremental_inference(model, prefix_len=500, final_len=512, batch_size=1, incremental=True)
 test_incremental_inference(model, prefix_len=500, final_len=512, batch_size=1, incremental=False)
+test_incremental_inference(model, prefix_len=1, final_len=512, batch_size=1, incremental=True)
 
 # print('output', out_tensor, out_dict)
 # print('time consumption: {} ms ({} us per step)'.format((end - start) * 1000, (end - start) * 1e6 / seq_len))

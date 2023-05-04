@@ -13,14 +13,21 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 import argparse
 parser = argparse.ArgumentParser()
 args = parser.parse_args()
+
 args.encoder = { \
     "embed_dim" : 1024, 
     "ffn_embed_dim": 4096, 
     "layers" : 12,
     "attention_heads" : 16}
 
+args.decoder = { \
+    "embed_dim" : 1024, 
+    "ffn_embed_dim": 4096, 
+    "layers" : 12,
+    "attention_heads" : 16}
+
 cfg = TransformerConfig.from_namespace(args)
-print(f"The config created from args: {cfg}")
+print(f"The config created from args: {args}")
 
 # vocab to vocab ID
 dictionary = Dictionary()
@@ -28,17 +35,16 @@ dictionary = Dictionary()
 # Input embeddings
 vocab_size = 10
 enc_embs = torch.nn.Embedding(vocab_size, args.encoder["embed_dim"], dictionary.pad())
+dec_embs = torch.nn.Embedding(vocab_size, args.encoder["embed_dim"], dictionary.pad())
 
-model = TransformerEncoder(args, dictionary, enc_embs)
-print(model)
+model_encoder = TransformerEncoder(args, dictionary, enc_embs)
+model_decoder = TransformerDecoder(args, dictionary, enc_embs, no_encoder_attn=False)
+print(f"Model Encoder: {model_encoder}")
+print(f"Model Decoder: {model_decoder}")
 
-batch_size = 2
+batch_size = 1
 seq_len = 512
 input_tokens = torch.tensor([[1] * seq_len] * batch_size)
-
-# enc_embs.to(device)
-# model.to(device)
-# input_tokens.to(device)
 
 """
 encoder output dict:
@@ -53,17 +59,21 @@ encoder output dict:
         Only populated if *return_all_hiddens* is True.
 """
 
-out_dict = model(input_tokens)
-
 with torch.no_grad():
     start = time.time()
-    out_dict = model(input_tokens)
+    encoder_out_dict = model_encoder(input_tokens)
     end = time.time()
-                  
-print('\noutput:\n', out_dict)
-print('\nencoder_out:\n', out_dict['encoder_out'], out_dict['encoder_out'][0].shape)
-print('\nencoder_padding_mask:\n', out_dict['encoder_padding_mask'], out_dict['encoder_padding_mask'][0].shape)
-print('\nencoder_embedding:\n', out_dict['encoder_embedding'], out_dict['encoder_embedding'][0].shape)
-print('\nencoder_states:\n', out_dict['encoder_states'])
-print('time consumption: {} ms'.format((end - start) * 1000))
+    print('Encoder time consumption: {} ms'.format((end - start) * 1000))
 
+    out_seq_len = 64
+    incremental_state = dict()
+    for seq_len in range(1, out_seq_len + 1):
+        output_tokens = torch.tensor([[1] * seq_len] * batch_size)
+        start = time.time()
+        decoder_out_tensor, decoder_out_dict = model_decoder(
+            output_tokens, encoder_out=encoder_out_dict, incremental_state=incremental_state)
+        end = time.time()
+        print('Decoder step: {}\ttime consumption: {} ms'.format(seq_len, (end - start) * 1000))
+        for k in incremental_state:
+            print("Shape of one layer in incremental_state: ", incremental_state[k]['prev_key'].shape)
+            break
