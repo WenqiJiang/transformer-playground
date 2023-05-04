@@ -6,15 +6,34 @@ from fairseq.models.transformer import (
     TransformerDecoder,
 )
 from fairseq.data import Dictionary
+from fairseq.models.transformer import TransformerConfig
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-args = {}
+import argparse
+parser = argparse.ArgumentParser()
+args = parser.parse_args()
+args.decoder = { \
+    "embed_dim" : 1024, 
+    "ffn_embed_dim": 4096, 
+    "layers" : 12,
+    "attention_heads" : 16}
+args.encoder = { \
+    "embed_dim" : 1024, 
+    "ffn_embed_dim": 4096, 
+    "layers" : 12,
+    "attention_heads" : 16}
+
+cfg = TransformerConfig.from_namespace(args)
+print(f"The config created from args: {cfg}")
+
+# vocab to vocab ID
 dictionary = Dictionary()
+
+# Input embeddings
 vocab_size = 10
-embedding_dim = 128
-dec_embs = torch.nn.Embedding(vocab_size, embedding_dim, dictionary.pad())
-# dec_embs.to(device)
+dec_embs = torch.nn.Embedding(vocab_size, args.decoder["embed_dim"], dictionary.pad())
+
 model = TransformerDecoder(args, dictionary, dec_embs)
 print(model)
 
@@ -22,6 +41,7 @@ batch_size = 1
 seq_len = 512
 input_tokens = torch.tensor([[0] * seq_len] * batch_size)
 
+# dec_embs.to(device)
 # model.to(device)
 # input_tokens.to(device)
 
