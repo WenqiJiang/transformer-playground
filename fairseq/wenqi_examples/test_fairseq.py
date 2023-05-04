@@ -39,21 +39,43 @@ print(model)
 
 batch_size = 1
 seq_len = 512
-input_tokens = torch.tensor([[0] * seq_len] * batch_size)
+input_tokens = torch.tensor([[1] * seq_len] * batch_size)
 
 # dec_embs.to(device)
 # model.to(device)
 # input_tokens.to(device)
 
-model(input_tokens)
+# instantiate a new dict for the first time
+# out_tensor, out_dict = model(input_tokens)
+# incremental_state = dict()
+# out_tensor, out_dict = model(input_tokens, incremental_state=incremental_state)
 
-with torch.no_grad():
-    start = time.time()
-    output = model(input_tokens)
-    end = time.time()
-  
-print('output', output)
-print('time consumption: {} ms ({} us per step)'.format((end - start) * 1000, (end - start) * 1e6 / seq_len))
+def test_incremental_inference(model, prefix_len=500, final_len=512, batch_size=1, incremental=True):
+    """
+    Test incremental inference performance. 
+    """
+    print("Enable incremental inference: ",  incremental)
+    with torch.no_grad():
+
+        incremental_state = dict() # initiate
+        time_array = []
+
+        for seq_len in range(prefix_len, final_len + 1):
+            input_tokens = torch.tensor([[0] * seq_len] * batch_size)
+            start = time.time()
+            if incremental:
+                out_tensor, out_dict = model(input_tokens, incremental_state=incremental_state)
+            else:
+                out_tensor, out_dict = model(input_tokens)
+            end = time.time()
+            time_array.append(end - start)
+            print('step {}: {} ms'.format(seq_len, (end - start) * 1000))
+                  
+test_incremental_inference(model, prefix_len=500, final_len=512, batch_size=1, incremental=True)
+test_incremental_inference(model, prefix_len=500, final_len=512, batch_size=1, incremental=False)
+
+# print('output', out_tensor, out_dict)
+# print('time consumption: {} ms ({} us per step)'.format((end - start) * 1000, (end - start) * 1e6 / seq_len))
 
 
 """
